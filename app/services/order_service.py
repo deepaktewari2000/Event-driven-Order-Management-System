@@ -1,0 +1,256 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_
+from typing import List, Optional, Tuple
+from app.models.order import Order, OrderStatus
+from app.models.user import User
+from app.schemas.order import OrderCreate, OrderUpdate, OrderFilter
+from app.core.exceptions import OrderNotFoundException, ForbiddenException
+
+
+async def create_order(
+    db: AsyncSession,
+    order_data: OrderCreate,
+    user: User
+) -> Order:
+    """
+    Create a new order.
+    
+    Args:
+        db: Database session
+        order_data: Order creation data
+        user: Current user
+        
+    Returns:
+        Created order
+    """
+    # Calculate total price if not provided
+    total_price = order_data.total_price if order_data.total_price else order_data.quantity * 100.0
+    
+    order = Order(
+        user_id=user.id,
+        product_id=order_data.product_id,
+        quantity=order_data.quantity,
+        total_price=total_price,
+        customer_email=order_data.customer_email,
+        shipping_address=order_data.shipping_address,
+        status=OrderStatus.CREATED
+    )
+    
+    db.add(order)
+    await db.commit()
+    await db.refresh(order)
+    
+    return order
+
+
+async def get_order(
+    db: AsyncSession,
+    order_id: int
+) -> Optional[Order]:
+    """
+    Get order by ID.
+    
+    Args:
+        db: Database session
+        order_id: Order ID
+        
+    Returns:
+        Order or None
+    """
+    return await db.get(Order, order_id)
+
+
+async def update_order(
+    db: AsyncSession,
+    order_id: int,
+    order_data: OrderUpdate,
+    user: User
+) -> Order:
+    """
+    Update an order.
+    
+    Args:
+        db: Database session
+        order_id: Order ID
+        order_data: Update data
+        user: Current user
+        
+    Returns:
+        Updated order
+        
+    Raises:
+        OrderNotFoundException: If order not found
+        ForbiddenException: If user doesn't own the order
+    """
+    order = await get_order(db, order_id)
+    
+    if not order:
+        raise OrderNotFoundException(order_id)
+    
+    # Check ownership (unless admin)
+    from app.models.user import UserRole
+    if order.user_id != user.id and user.role != UserRole.ADMIN:
+        raise ForbiddenException("You don't have permission to update this order")
+    
+    # Update fields
+    if order_data.quantity is not None:
+        order.quantity = order_data.quantity
+    if order_data.shipping_address is not None:
+        order.shipping_address = order_data.shipping_address
+    if order_data.total_price is not None:
+        order.total_price = order_data.total_price
+    
+    await db.commit()
+    await db.refresh(order)
+    
+    return order
+
+
+async def delete_order(
+    db: AsyncSession,
+    order_id: int,
+    user: User
+) -> None:
+    """
+    Delete an order (admin only).
+    
+    Args:
+        db: Database session
+        order_id: Order ID
+        user: Current user (must be admin)
+        
+    Raises:
+        OrderNotFoundException: If order not found
+    """
+    order = await get_order(db, order_id)
+    
+    if not order:
+        raise OrderNotFoundException(order_id)
+    
+    await db.delete(order)
+    await db.commit()
+
+
+async def update_order_status(
+    db: AsyncSession,
+    order_id: int,
+    status: OrderStatus
+) -> Order:
+    """
+    Update order status (admin only).
+    
+    Args:
+        db: Database session
+        order_id: Order ID
+        status: New status
+        
+    Returns:
+        Updated order
+        
+    Raises:
+        OrderNotFoundException: If order not found
+    """
+    order = await get_order(db, order_id)
+    
+    if not order:
+        raise OrderNotFoundException(order_id)
+    
+    order.status = status
+    await db.commit()
+    await db.refresh(order)
+    
+    return order
+
+
+async def list_orders(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 10,
+    filters: Optional[OrderFilter] = None,
+    user: Optional[User] = None
+) -> Tuple[List[Order], int]:
+    """
+    List orders with pagination and filtering.
+    
+    Args:
+        db: Database session
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        filters: Optional filters
+        user: Current user (if not admin, only returns their orders)
+        
+    Returns:
+        Tuple of (orders list, total count)
+    """
+    query = select(Order)
+    
+    # Build filter conditions
+    conditions = []
+    
+    # Non-admin users can only see their own orders
+    if user and user.role.value != "ADMIN":
+        conditions.append(Order.user_id == user.id)
+    
+    if filters:
+        if filters.status:
+            conditions.append(Order.status == filters.status)
+        if filters.product_id:
+            conditions.append(Order.product_id == filters.product_id)
+        if filters.user_id:
+            conditions.append(Order.user_id == filters.user_id)
+        if filters.min_price is not None:
+            conditions.append(Order.total_price >= filters.min_price)
+        if filters.max_price is not None:
+            conditions.append(Order.total_price <= filters.max_price)
+    
+    if conditions:
+        query = query.where(and_(*conditions))
+    
+    # Get total count
+    count_query = select(func.count()).select_from(Order)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+    
+    # Get paginated results
+    query = query.offset(skip).limit(limit).order_by(Order.created_at.desc())
+    result = await db.execute(query)
+    orders = result.scalars().all()
+    
+    return list(orders), total
+
+
+async def get_user_orders(
+    db: AsyncSession,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 10
+) -> Tuple[List[Order], int]:
+    """
+    Get orders for a specific user.
+    
+    Args:
+        db: Database session
+        user_id: User ID
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        
+    Returns:
+        Tuple of (orders list, total count)
+    """
+    query = select(Order).where(Order.user_id == user_id)
+    
+    # Get total count
+    count_query = select(func.count()).select_from(Order).where(Order.user_id == user_id)
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+    
+    # Get paginated results
+    query = query.offset(skip).limit(limit).order_by(Order.created_at.desc())
+    result = await db.execute(query)
+    orders = result.scalars().all()
+    
+    return list(orders), total
+

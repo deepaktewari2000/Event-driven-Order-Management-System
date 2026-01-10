@@ -12,9 +12,11 @@ A **production-ready, event-driven order management system** built with FastAPI,
 - ✅ **Complete REST API** - Full CRUD operations for orders
 - ✅ **Authentication & Authorization** - JWT-based auth with role-based access (Admin/Customer)
 - ✅ **Advanced Querying** - Pagination, filtering, and sorting
-- ✅ **Event-Driven Architecture** - Kafka integration for order events
+- ✅ **Event-Driven Architecture** - Kafka integration with Producer/Consumer pattern
+- ✅ **Email Notifications** - Automated order confirmations via background workers
 - ✅ **Caching Layer** - Redis for performance optimization
 - ✅ **Database Migrations** - Alembic for schema management
+- ✅ **Email Testing** - MailHog integration for local development
 
 ### Production Features
 - ✅ **Structured Logging** - JSON logging for production
@@ -35,6 +37,7 @@ A **production-ready, event-driven order management system** built with FastAPI,
 | **Authentication** | JWT (python-jose) |
 | **Password Hashing** | bcrypt (passlib) |
 | **Migrations** | Alembic |
+| **Email Testing** | MailHog |
 | **Testing** | pytest + pytest-asyncio |
 | **Containerization** | Docker + Docker Compose |
 
@@ -44,10 +47,22 @@ A **production-ready, event-driven order management system** built with FastAPI,
 ┌─────────────┐      ┌──────────────┐      ┌─────────────┐
 │   Client    │─────▶│  FastAPI App │─────▶│ PostgreSQL  │
 └─────────────┘      └──────────────┘      └─────────────┘
-                            │
+                            │                     │
                             ├──────────────▶ Redis (Cache)
                             │
                             └──────────────▶ Kafka (Events)
+                                               │
+                                               ▼
+                                     ┌─────────────────┐
+                                     │ Background      │
+                                     │ Order Consumer  │
+                                     └─────────────────┘
+                                               │
+                                               ▼
+                                     ┌─────────────────┐
+                                     │ Email Notification│
+                                     │   (MailHog)     │
+                                     └─────────────────┘
 ```
 
 ## 🚦 Quick Start
@@ -94,8 +109,8 @@ alembic upgrade head
 
 ### 5. Access the API
 - **API Documentation**: http://localhost:8000/docs
-- **Alternative Docs**: http://localhost:8000/redoc
 - **Health Check**: http://localhost:8000/health
+- **MailHog UI (Emails)**: http://localhost:8025
 
 ## 📖 API Usage
 
@@ -286,6 +301,7 @@ mypy app/
 - **CORS Configuration** - Configurable allowed origins
 - **Rate Limiting** - Protection against abuse (via middleware)
 - **Input Validation** - Pydantic schemas for all inputs
+- **Async Processing** - Background email sending via Kafka
 
 ## 📈 Performance Optimizations
 
@@ -328,6 +344,9 @@ docker-compose exec app alembic upgrade head
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiration time | `30` |
 | `DEBUG` | Debug mode | `True` |
 | `ENVIRONMENT` | Environment name | `development` |
+| `SMTP_HOST` | Mail server host | `mailhog` |
+| `SMTP_PORT` | Mail server port | `1025` |
+| `SMTP_FROM_EMAIL` | Sender address | `noreply@ordersystem.com` |
 
 ## 🎯 Resume Highlights
 

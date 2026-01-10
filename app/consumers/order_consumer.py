@@ -3,6 +3,7 @@ import json
 import logging
 from aiokafka import AIOKafkaConsumer
 from app.core.config import settings
+from app.services.email_service import send_order_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,16 @@ async def consume_order_events():
             logger.info(f"Started consuming events from topic: {settings.KAFKA_TOPIC_ORDER_EVENTS}")
             
             async for msg in consumer:
-                logger.info(f"Received order event: {msg.value}")
+                event_data = msg.value
+                logger.info(f"Received order event: {event_data}")
+                
+                # Send email confirmation
+                if event_data.get("event") == "ORDER_CREATED":
+                    customer_email = event_data.get("customer_email")
+                    if customer_email:
+                        await send_order_confirmation(customer_email, event_data)
+                    else:
+                        logger.warning(f"No customer email found in event for order {event_data.get('order_id')}")
             
             break # Exit retry loop if processing ends normally
                 

@@ -22,8 +22,9 @@ aiokafka
 # Configuration
 python-dotenv
 
-# Email validation
+# Email
 email-validator
+aiosmtplib
 
 # Testing
 pytest

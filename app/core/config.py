@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
     KAFKA_TOPIC_ORDER_EVENTS: str = "order-events"
     
+    # SMTP Settings (MailHog)
+    SMTP_HOST: str = "mailhog"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "noreply@ordersystem.com"
+    
     # Application
     APP_NAME: str = "Event-Driven Order Management System"
     APP_VERSION: str = "1.0.0"

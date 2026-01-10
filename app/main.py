@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import orders, auth
@@ -8,6 +9,7 @@ from app.core.logging import setup_logging
 
 # Setup logging
 setup_logging("INFO" if not settings.DEBUG else "DEBUG")
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -23,6 +25,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Kafka Lifecycle Management
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting up application...")
+    from app.core.kafka import kafka_producer
+    from app.consumers.order_consumer import consume_order_events
+    import asyncio
+    
+    # Start Producer
+    await kafka_producer.start()
+    
+    # Start Consumer in background
+    asyncio.create_task(consume_order_events())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down application...")
+    from app.core.kafka import kafka_producer
+    await kafka_producer.stop()
 
 # Note: Table creation is now handled by Alembic migrations
 # Remove the startup event that creates tables automatically

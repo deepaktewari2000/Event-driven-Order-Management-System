@@ -5,6 +5,8 @@ from app.models.order import Order, OrderStatus
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderUpdate, OrderFilter
 from app.core.exceptions import OrderNotFoundException, ForbiddenException
+from app.core.config import settings
+from app.core.kafka import kafka_producer
 
 
 async def create_order(
@@ -39,6 +41,18 @@ async def create_order(
     db.add(order)
     await db.commit()
     await db.refresh(order)
+    
+    # Send event to Kafka
+    order_event = {
+        "event": "ORDER_CREATED",
+        "order_id": order.id,
+        "product_id": order.product_id,
+        "quantity": order.quantity,
+        "total_price": order.total_price,
+        "status": order.status.value,
+        "customer_email": order.customer_email
+    }
+    await kafka_producer.send_message(settings.KAFKA_TOPIC_ORDER_EVENTS, order_event)
     
     return order
 

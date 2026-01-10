@@ -32,10 +32,14 @@ async def startup_event():
     logger.info("Starting up application...")
     from app.core.kafka import kafka_producer
     from app.consumers.order_consumer import consume_order_events
+    from app.core.redis import redis_client
     import asyncio
     
     # Start Producer
     await kafka_producer.start()
+    
+    # Connect Redis
+    await redis_client.connect()
     
     # Start Consumer in background
     asyncio.create_task(consume_order_events())
@@ -44,7 +48,9 @@ async def startup_event():
 async def shutdown_event():
     logger.info("Shutting down application...")
     from app.core.kafka import kafka_producer
+    from app.core.redis import redis_client
     await kafka_producer.stop()
+    await redis_client.disconnect()
 
 # Note: Table creation is now handled by Alembic migrations
 # Remove the startup event that creates tables automatically

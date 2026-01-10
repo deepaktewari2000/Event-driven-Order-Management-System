@@ -14,7 +14,8 @@ A **production-ready, event-driven order management system** built with FastAPI,
 - ✅ **Advanced Querying** - Pagination, filtering, and sorting
 - ✅ **Event-Driven Architecture** - Kafka integration with Producer/Consumer pattern
 - ✅ **Email Notifications** - Automated order confirmations via background workers
-- ✅ **Caching Layer** - Redis for performance optimization
+- ✅ **Distributed Caching** - Redis for high-performance order retrieval (Read-Through pattern)
+- ✅ **Cache Invalidation** - Intelligent cache clearing on data updates/deletions
 - ✅ **Database Migrations** - Alembic for schema management
 - ✅ **Email Testing** - MailHog integration for local development
 
@@ -305,11 +306,13 @@ mypy app/
 
 ## 📈 Performance Optimizations
 
-- **Async/Await** - Non-blocking I/O operations
-- **Connection Pooling** - Efficient database connections
-- **Redis Caching** - Reduced database load
-- **Database Indexing** - Optimized queries
-- **Pagination** - Efficient data retrieval
+- **Async/Await** - Non-blocking I/O operations for high concurrency
+- **Connection Pooling** - Efficient management of DB and Redis connections
+- **Distributed Caching** - Redis stores order data to minimize PostgreSQL hits
+- **Read-Through Cache** - Automatically populates cache on first read
+- **Cache Invalidation** - Ensures data consistency by clearing cache on updates/deletes
+- **Database Indexing** - Optimized SQL queries for filtered searches
+- **Pagination** - Efficient data retrieval for large datasets
 
 ## 🐳 Docker Commands
 

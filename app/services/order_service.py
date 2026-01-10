@@ -1,12 +1,16 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from app.models.order import Order, OrderStatus
 from app.models.user import User
-from app.schemas.order import OrderCreate, OrderUpdate, OrderFilter
+from app.schemas.order import OrderCreate, OrderUpdate, OrderFilter, OrderResponse
 from app.core.exceptions import OrderNotFoundException, ForbiddenException
 from app.core.config import settings
 from app.core.kafka import kafka_producer
+from app.core.redis import redis_client
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def create_order(
@@ -59,19 +63,29 @@ async def create_order(
 
 async def get_order(
     db: AsyncSession,
-    order_id: int
-) -> Optional[Order]:
+    order_id: int,
+    use_cache: bool = True
+) -> Optional[Any]:
     """
-    Get order by ID.
+    Get order by ID. Checks Redis cache first if use_cache is True.
+    """
+    cache_key = f"order:{order_id}"
     
-    Args:
-        db: Database session
-        order_id: Order ID
+    if use_cache:
+        cached_order = await redis_client.get(cache_key)
+        if cached_order:
+            logger.debug(f"Redis cache hit for order {order_id}")
+            return OrderResponse.model_validate(cached_order)
+            
+    order = await db.get(Order, order_id)
+    
+    if order and use_cache:
+        # Cache the order data for 1 hour
+        order_data = OrderResponse.model_validate(order).model_dump(mode='json')
+        await redis_client.set(cache_key, order_data)
+        logger.debug(f"Redis cache miss for order {order_id}. Cached data.")
         
-    Returns:
-        Order or None
-    """
-    return await db.get(Order, order_id)
+    return order
 
 
 async def update_order(
@@ -96,7 +110,8 @@ async def update_order(
         OrderNotFoundException: If order not found
         ForbiddenException: If user doesn't own the order
     """
-    order = await get_order(db, order_id)
+    # Bypass cache for update
+    order = await get_order(db, order_id, use_cache=False)
     
     if not order:
         raise OrderNotFoundException(order_id)
@@ -117,6 +132,9 @@ async def update_order(
     await db.commit()
     await db.refresh(order)
     
+    # Invalidate cache
+    await redis_client.delete(f"order:{order_id}")
+    
     return order
 
 
@@ -136,13 +154,17 @@ async def delete_order(
     Raises:
         OrderNotFoundException: If order not found
     """
-    order = await get_order(db, order_id)
+    # Bypass cache for deletion
+    order = await get_order(db, order_id, use_cache=False)
     
     if not order:
         raise OrderNotFoundException(order_id)
     
     await db.delete(order)
     await db.commit()
+    
+    # Invalidate cache
+    await redis_client.delete(f"order:{order_id}")
 
 
 async def update_order_status(
@@ -164,7 +186,8 @@ async def update_order_status(
     Raises:
         OrderNotFoundException: If order not found
     """
-    order = await get_order(db, order_id)
+    # Bypass cache for update
+    order = await get_order(db, order_id, use_cache=False)
     
     if not order:
         raise OrderNotFoundException(order_id)
@@ -172,6 +195,9 @@ async def update_order_status(
     order.status = status
     await db.commit()
     await db.refresh(order)
+    
+    # Invalidate cache
+    await redis_client.delete(f"order:{order_id}")
     
     return order
 

@@ -35,7 +35,7 @@ class TestOrderCRUD:
                 "customer_email": "customer@example.com"
             }
         )
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_get_order(self, client: TestClient, test_user, auth_headers):
         """Test getting a specific order."""

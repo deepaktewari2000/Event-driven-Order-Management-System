@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import orders, auth
-from app.db.base import Base
+from app.db.base_class import Base
 from app.db.session import engine
 from app.core.config import settings
 from app.core.logging import setup_logging

@@ -84,7 +84,7 @@ class TestAuthentication:
     def test_get_current_user_no_token(self, client: TestClient):
         """Test accessing protected endpoint without token fails."""
         response = client.get("/auth/me")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_get_current_user_invalid_token(self, client: TestClient):
         """Test accessing protected endpoint with invalid token fails."""

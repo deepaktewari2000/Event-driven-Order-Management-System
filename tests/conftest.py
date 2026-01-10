@@ -4,8 +4,9 @@ from typing import AsyncGenerator, Generator
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import StaticPool
 
+# Import all models here so Alembic can detect them
 from app.main import app
 from app.db.base import Base
 from app.db.session import get_db
@@ -19,7 +20,7 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 test_engine = create_async_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
-    poolclass=NullPool,
+    poolclass=StaticPool,
 )
 
 # Create session factory

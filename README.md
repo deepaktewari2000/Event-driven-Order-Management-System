@@ -9,7 +9,8 @@ A **production-ready, event-driven order management system** built with FastAPI,
 ## 🚀 Features
 
 ### Core Functionality
-- ✅ **Complete REST API** - Full CRUD operations for orders
+- ✅ **Complete REST API** - Full CRUD operations for orders and products
+- ✅ **Product & Inventory** - Catalog management with real-time stock tracking
 - ✅ **Authentication & Authorization** - JWT-based auth with role-based access (Admin/Customer)
 - ✅ **Advanced Querying** - Pagination, filtering, and sorting
 - ✅ **Event-Driven Architecture** - Kafka integration with Producer/Consumer pattern
@@ -108,7 +109,13 @@ docker-compose exec app alembic upgrade head
 alembic upgrade head
 ```
 
-### 5. Access the API
+### 5. Bootstrap Admin User
+To perform administrative actions (like managing products), you'll need an Admin account.
+```bash
+docker-compose exec app python3 /app/app/create_admin.py admin@example.com adminpass123 "System Admin"
+```
+
+### 6. Access the API
 - **API Documentation**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/health
 - **MailHog UI (Emails)**: http://localhost:8025
@@ -144,6 +151,26 @@ curl -X POST http://localhost:8000/auth/login \
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type": "bearer"
 }
+```
+
+### Product Catalog
+
+#### Create a Product (Admin Only)
+```bash
+curl -X POST http://localhost:8000/products \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "FAANG Phone",
+    "description": "Premium device",
+    "price": 999.99,
+    "stock_quantity": 50
+  }'
+```
+
+#### List Products (Public)
+```bash
+curl -X GET "http://localhost:8000/products?skip=0&limit=20"
 ```
 
 ### Order Management
@@ -294,6 +321,17 @@ mypy app/
 | created_at | DateTime | Creation timestamp |
 | updated_at | DateTime | Last update timestamp |
 
+### Products Table
+| Column | Type | Description |
+|--------|------|-------------|
+| id | Integer | Primary key |
+| name | String | Product name |
+| description | Text | Product description |
+| price | Float | Current price |
+| stock_quantity | Integer | Units in stock |
+| created_at | DateTime | Creation timestamp |
+| updated_at | DateTime | Last update timestamp |
+
 ## 🔐 Security Features
 
 - **JWT Authentication** - Secure token-based authentication
@@ -307,6 +345,7 @@ mypy app/
 ## 📈 Performance Optimizations
 
 - **Async/Await** - Non-blocking I/O operations for high concurrency
+- **Transactional Safety** - Atomically deduct stock during order creation
 - **Connection Pooling** - Efficient management of DB and Redis connections
 - **Distributed Caching** - Redis stores order data to minimize PostgreSQL hits
 - **Read-Through Cache** - Automatically populates cache on first read

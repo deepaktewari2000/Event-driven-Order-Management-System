@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import orders, auth
+from app.api.routes import orders, auth, products
 from app.db.base_class import Base
 from app.db.session import engine
 from app.core.config import settings
@@ -57,6 +57,7 @@ async def shutdown_event():
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(products.router)
 app.include_router(orders.router)
 
 @app.get("/health")

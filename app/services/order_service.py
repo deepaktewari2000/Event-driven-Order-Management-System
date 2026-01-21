@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from typing import List, Optional, Tuple, Any
@@ -8,6 +9,7 @@ from app.core.exceptions import OrderNotFoundException, ForbiddenException
 from app.core.config import settings
 from app.core.kafka import kafka_producer
 from app.core.redis import redis_client
+from app.services import product_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,9 +31,26 @@ async def create_order(
     Returns:
         Created order
     """
-    # Calculate total price if not provided
-    total_price = order_data.total_price if order_data.total_price else order_data.quantity * 100.0
+    # 1. Validate Product and Check Stock
+    try:
+        product_id = int(order_data.product_id)
+    except ValueError:
+         raise HTTPException(status_code=400, detail="Invalid product_id format. Must be an integer.")
+
+    product = await product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product with ID {product_id} not found")
     
+    if product.stock_quantity < order_data.quantity:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient stock for product '{product.name}'. Available: {product.stock_quantity}, Requested: {order_data.quantity}"
+        )
+
+    # 2. Use Product Price and Calculate Total
+    total_price = product.price * order_data.quantity
+    
+    # 3. Create Order
     order = Order(
         user_id=user.id,
         product_id=order_data.product_id,
@@ -43,6 +62,14 @@ async def create_order(
     )
     
     db.add(order)
+    
+    # 4. Deduct Stock (Transactional)
+    success = await product_service.deduct_stock(db, product_id, order_data.quantity)
+    if not success:
+        # This shouldn't happen because we checked stock, but for safety:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Stock deduction failed.")
+
     await db.commit()
     await db.refresh(order)
     
